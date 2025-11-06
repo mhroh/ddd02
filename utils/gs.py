@@ -43,7 +43,7 @@ def get_authorize():
     # gspread 클라이언트 생성
     return gspread.authorize(creds)
 
-def getSetupInfo():
+def get_setup_info():
     """
     Google Sheets에서 설정 정보를 가져오는 함수입니다.
 
@@ -112,14 +112,18 @@ def add_Content(role, content):
     이 함수는 현재 시간, 역할, 그리고 메시지 내용을 포함하는 새로운 행을
     세션 상태에 저장된 Google Sheets 워크시트에 추가합니다.
     """
-    contents = [get_timestamp()]
+    try:
+        contents = [get_timestamp()]
 
-    if role == "user":
-        contents += ["USER", content]
-    elif role == "assistant":
-        contents +=["ASSISTANT", content]
+        if role == "user":
+            contents += ["USER", content]
+        elif role == "assistant":
+            contents += ["ASSISTANT", content]
 
-    st.session_state["sheet"].append_row(contents)
+        st.session_state["sheet"].append_row(contents)
+    except Exception as e:
+        print(f"Google Sheets에 데이터 추가 실패: {str(e)}")
+        # 에러 발생 시에도 프로그램은 계속 실행되도록 함
 
 def get_timestamp():
     """
@@ -192,9 +196,13 @@ def delete_message():
     2. 워크시트의 첫 번째 열에서 데이터가 있는 마지막 행의 번호를 찾습니다.
     3. 해당 행을 삭제합니다(마지막 대화 삭제).
     """
-    target = st.session_state["sheet"]
-    target_row = len(target.col_values(1))
-    target.delete_rows(target_row)
+    try:
+        target = st.session_state["sheet"]
+        target_row = len(target.col_values(1))
+        if target_row > 0:
+            target.delete_rows(target_row)
+    except Exception as e:
+        print(f"메시지 삭제 실패: {str(e)}")
 
 def get_summary_sheet(doc):
     """

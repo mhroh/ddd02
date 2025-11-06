@@ -1,10 +1,8 @@
-import functools
 import streamlit as st
 from streamlit import logger
 import anthropic
 from anthropic import APIError, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 from utils import gs
-import time
 
 if "processing" not in st.session_state:
     st.session_state.processing = False
@@ -27,10 +25,10 @@ def initialize(api_key, nick_name):
 
     이 함수는 이미 초기화가 완료된 경우 아무 작업도 수행하지 않습니다.
     """
-    if "bot" and "sheet" in st.session_state:
+    if "bot" in st.session_state and "sheet" in st.session_state:
         return
-    
-    log_p("초기화 시작")
+
+    log_message("초기화 시작")
     # Anthropic
     st.session_state["api_key"] = api_key
     st.session_state["bot"] = anthropic.Anthropic(api_key = api_key)
@@ -41,11 +39,11 @@ def initialize(api_key, nick_name):
     sheet_url = st.session_state["setupInfo"]["url"]
     st.session_state["doc"] = gc.open_by_url(sheet_url)
     st.session_state["sheet"] = gs.get_worksheet(st.session_state["doc"], nick_name)
-    log_p("초기화 완료")
+    log_message("초기화 완료")
 
 def set_class_info():
-    log_p("클래스 정보 설정")
-    st.session_state['setupInfo'] = gs.getSetupInfo()
+    log_message("클래스 정보 설정")
+    st.session_state['setupInfo'] = gs.get_setup_info()
 
 def process_data(function_name):
     with st.spinner('마무리 하는 중~'):
@@ -90,11 +88,8 @@ def main():
     if prompt := st.chat_input("대화 내용을 입력해 주세요.", on_submit=disable_input, args=(True,), disabled=st.session_state.processing):
         if not user_name:
             st.warning('대화명을 입력해 주세요!', icon='⚠️')
-
-            time.sleep(3)
             disable_input(False)
             st.rerun()
-
             return
         
         add_message(st.session_state.messages, "user", prompt)
@@ -112,13 +107,10 @@ def main():
                 message_placeholder.write("......")
                 stream = execute_prompt(st.session_state.messages[1:])
 
-                if stream == None:
+                if stream is None:
                     delete_message()
-
                     disable_input(False)
-                    time.sleep(3)
                     st.rerun()
-
                     return
 
                 full_response = message_processing(stream, message_placeholder)
@@ -128,10 +120,12 @@ def main():
             disable_input(False)
             st.rerun()
 
-@st.cache_data 
-def log_p(message):
+def log_message(message):
     """
-    콘솔에 메세지 출력하기
+    콘솔에 메시지를 출력하는 함수입니다.
+
+    Parameters:
+    message (str): 출력할 메시지
     """
     logger.get_logger(__name__).info(message)
 
@@ -163,38 +157,27 @@ def execute_prompt(messages):
 
         return stream
     except APITimeoutError as e:
-        log_p(f"ERROR: API 타임아웃 오류 발생: {str(e)}")
+        log_message(f"ERROR: API 타임아웃 오류 발생: {str(e)}")
         st.error("AI 서비스의 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.")
     except APIConnectionError as e:
-        log_p(f"ERROR: API 연결 오류 발생: {str(e)}")
+        log_message(f"ERROR: API 연결 오류 발생: {str(e)}")
         st.error("AI 서비스와의 연결에 실패했습니다. 인터넷 연결을 확인해 주세요.")
     except RateLimitError as e:
-        log_p(f"ERROR: API 사용량 제한 오류 발생: {str(e)}")
+        log_message(f"ERROR: API 사용량 제한 오류 발생: {str(e)}")
         st.error("AI 서비스 사용량이 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.")
     except APIStatusError as e:
-        log_p(f"API 상태 오류가 발생했습니다. 상태 코드: {e.status_code}, 오류 메시지: {e.message}")
+        log_message(f"API 상태 오류가 발생했습니다. 상태 코드: {e.status_code}, 오류 메시지: {e.message}")
         st.error(f"API 상태 오류가 발생했습니다. 상태 코드: {e.status_code}, 오류 메시지: {e.message}")
     except APIError as e:
-        log_p(f"ERROR: API 오류 발생: {str(e)}")
+        log_message(f"ERROR: API 오류 발생: {str(e)}")
         st.error("AI 서비스와 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
     except Exception as e:
-        log_p(f"ERROR:예상치 못한 오류 발생: {str(e)}")
+        log_message(f"ERROR: 예상치 못한 오류 발생: {str(e)}")
         st.error("예상치 못한 오류가 발생했습니다. 관리자에게 문의해 주세요.")
     finally:
         pass
 
     return None
-
-def wiget_on_off(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        st.session_state["processing"] = True
-        
-        result = func(*args, **kwargs)
-
-        st.session_state["processing"] = False
-        return result    
-    return wrapper
 
 def message_processing(stream, output = None):
     """
@@ -210,7 +193,7 @@ def message_processing(stream, output = None):
     이 함수는 스트림에서 청크를 반복적으로 읽어 전체 응답을 구성합니다.
     또한 Streamlit 출력 객체가 제공된 경우, 실시간으로 응답을 업데이트합니다.
     """
-    log_p("메시지 스트리밍 중")
+    log_message("메시지 스트리밍 중")
     full_response = ""
 
     for chunk in stream:
@@ -225,9 +208,9 @@ def message_processing(stream, output = None):
         elif chunk.type == "message_stop":
             # 메시지 종료 이벤트 처리 (필요한 경우)
             break
-        if output != None:
+        if output is not None:
             output.write(full_response + "▌")
-    log_p("메시지 스트리밍 완료")
+    log_message("메시지 스트리밍 완료")
 
     return full_response
 
@@ -243,49 +226,52 @@ def end_conversation():
 
     이 함수는 세션 상태에 저장된 설정 정보와 메시지 기록을 사용합니다.
     """
-    st.success("1/2 작업중......")
-    time.sleep(2)
-    st.success("1/2 완료")
-    time.sleep(2)
-    st.success("2/2 작업중......")
-    time.sleep(2)
-    st.success("2/2 완료")
-    time.sleep(2)
-    
-    return 
+    try:
+        log_message("평가 시작")
 
-    log_p("평가 시작")
+        # 종합평가, 평어를 시트에 저장
+        sheet = gs.get_summary_sheet(st.session_state["doc"])
+        setupInfo = st.session_state['setupInfo']
+        a_p = setupInfo["a_p"]
+        e_p = setupInfo["e_p"]
+        messages = st.session_state.messages[1:]
+        full_response = ""
 
-    # TODO 종합평가, 평어를 시트에 저장
-    sheet = gs.get_summary_sheet(st.session_state["doc"])
-    setupInfo = st.session_state['setupInfo']
-    a_p = setupInfo["a_p"]
-    e_p = setupInfo["e_p"]
-    messages = st.session_state.messages[1:]
-    full_response = ""
+        # 종합평가
+        st.success("1/2 작업중......")
+        add_message(messages, "user", a_p, withGS=False)
+        stream = execute_prompt(messages)
 
-    # 종합평가
-    st.success("1/2 작업중......")
-    add_message(messages, "user", a_p, withGS = False)
-    stream = execute_prompt(messages)
-    full_response = message_processing(stream)
-    add_message(messages, "assistant", full_response, withGS = False)
-    
-    cell = sheet.find(st.session_state["user_name_1"], in_column = 1)
-    sheet.update_cell(cell.row, cell.col + 1, full_response)
-    st.success("1/2 완료")
-    
-    # 평어
-    st.success("2/2 작업중......")
-    full_response = ""
-    add_message(messages, "user", e_p, withGS = False)
-    stream = execute_prompt(messages)
-    full_response = message_processing(stream)
-    add_message(messages, "assistant", full_response, withGS = False)
+        if stream is None:
+            st.error("평가를 생성하는 중 오류가 발생했습니다.")
+            return
 
-    sheet.update_cell(cell.row, cell.col + 2, full_response)
-    st.success("2/2 완료")
-    log_p("평가 완료")
+        full_response = message_processing(stream)
+        add_message(messages, "assistant", full_response, withGS=False)
+
+        cell = sheet.find(st.session_state["user_name_1"], in_column=1)
+        sheet.update_cell(cell.row, cell.col + 1, full_response)
+        st.success("1/2 완료")
+
+        # 평어
+        st.success("2/2 작업중......")
+        full_response = ""
+        add_message(messages, "user", e_p, withGS=False)
+        stream = execute_prompt(messages)
+
+        if stream is None:
+            st.error("평어를 생성하는 중 오류가 발생했습니다.")
+            return
+
+        full_response = message_processing(stream)
+        add_message(messages, "assistant", full_response, withGS=False)
+
+        sheet.update_cell(cell.row, cell.col + 2, full_response)
+        st.success("2/2 완료")
+        log_message("평가 완료")
+    except Exception as e:
+        log_message(f"평가 중 오류 발생: {str(e)}")
+        st.error(f"평가를 완료하는 중 오류가 발생했습니다: {str(e)}")
 
 def add_message(all_messages, role, message, withGS : bool = True):
     """
