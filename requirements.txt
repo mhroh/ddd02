@@ -1,6 +1,6 @@
 streamlit>=1.0
 openai>=0.10.0
 langchain
-anthropic
+anthropic>=0.114.0,<1
 gspread
 google-auth
