@@ -430,13 +430,11 @@ def execute_prompt(messages):
     설정된 파라미터에 따라 AI 모델에 요청을 보내고, 응답 스트림을 반환합니다.
     """
     setupInfo = st.session_state['setupInfo']
-    # Explicit model selection for this classroom deployment.
-    setupInfo["model"] = "claude-sonnet-5"
     client = st.session_state["bot"]
     
     try:
         request_params = {
-            "model": setupInfo["model"],
+            "model": "claude-sonnet-5-5",
             "max_tokens": setupInfo["max_tokens"],
             "cache_control": {"type": "ephemeral"},
             "system": setupInfo["system"],
@@ -444,12 +442,9 @@ def execute_prompt(messages):
             "stream": setupInfo["stream"],
         }
 
-        # Sonnet 5 rejects non-default sampling parameters. Older models keep
-        # using the temperature value managed in the Google Sheet.
-        if setupInfo["model"] == "claude-sonnet-5":
-            request_params["thinking"] = {"type": "disabled"}
-        else:
-            request_params["temperature"] = setupInfo["temperature"]
+        # Sonnet 5.5 uses between_tools to skip up-front thinking and rejects
+        # non-default sampling parameters. Keep classroom responses economical.
+        request_params["thinking"] = {"type": "between_tools"}
 
         stream = client.messages.create(**request_params)
 
